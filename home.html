@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Land Information System</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    body { display: flex; }
+    .sidebar {
+      width: 200px;
+      background-color: #f0fdf4;
+      padding: 20px;
+      border-right: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    .sidebar h2 { text-decoration: underline; color: #003366; margin-top: 0; }
+    .sidebar p { 
+      cursor: pointer; 
+      padding: 8px 0; 
+      border-bottom: 1px solid #e0e0e0; 
+    }
+    .sidebar p:hover { background-color: #dcfce7; }
+    .main {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    .main h1 { font-size: 24px; margin-bottom: 20px; margin-top: 0; }
+    .content {
+      display: flex;
+      gap: 20px;
+      flex: 1;
+      overflow: hidden;
+    }
+    .search-box, .parcel-info {
+      width: 25%;
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.05);
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .search-box h3, .parcel-info h3 { margin-top: 0; }
+    .map-box {
+      flex: 1;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 400px;
+    }
+    #map {
+      flex-grow: 1;
+      min-height: 350px;
+      width: 100%;
+      border-radius: 8px;
+    }
+    input {
+      display: block;
+      margin-bottom: 10px;
+      padding: 8px;
+      width: 100%;
+      background-color: #d1fae5;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #047857;
+      color: white;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+    button:hover { background-color: #065f46; }
+    .clear-btn {
+      background-color: #6b7280;
+    }
+    .clear-btn:hover { background-color: #4b5563; }
+    .tabs {
+      margin-bottom: 15px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+    .tabs span {
+      margin-right: 15px;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 5px 0;
+    }
+    .tabs span:hover { color: #047857; }
+    .parcel-info ul { list-style: none; padding: 0; margin: 0; }
+    .parcel-info ul li { 
+      margin-bottom: 8px; 
+      padding: 5px;
+      background-color: #f9fafb;
+      border-radius: 3px;
+    }
+    .map-label {
+      text-align: center;
+      padding: 10px;
+      font-weight: bold;
+      background-color: #f9fafb;
+      border-top: 1px solid #ddd;
+      border-radius: 0 0 8px 8px;
+    }
+    .error-message {
+      color: #dc2626;
+      background-color: #fef2f2;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #fecaca;
+    }
+    .success-message {
+      color: #059669;
+      background-color: #f0fdf4;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #bbf7d0;
+    }
+    .loading {
+      text-align: center;
+      color: #6b7280;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <h2>LAND</h2>
+    <p onclick="showDashboard()">Dashboard</p>
+    <p onclick="showSearch()">Search</p>
+    <p onclick="showMap()">Map</p>
+  </div>
+
+  <div class="main">
+    <h1>LAND INFORMATION SYSTEM</h1>
+    <div class="content">
+      <!-- Search Section -->
+      <div class="search-box">
+        <h3>Search Parcel</h3>
+        <div id="searchMessages"></div>
+        <input type="text" id="parcel_No" placeholder="Parcel Number">
+        <input type="text" id="ownerName" placeholder="Owner Name">
+        <input type="text" id="frNumber" placeholder="FR Number">
+        <input type="text" id="shape_area" placeholder="Area (sq meters)">
+        <input type="text" id="shape_length" placeholder="Perimeter (meters)">
+        <button onclick="searchParcel()">Search</button>
+        <button onclick="clearSearch()" class="clear-btn">Clear</button>
+        <button onclick="loadSampleData()" style="background-color: #2563eb;">Load Sample Data</button>
+      </div>
+
+      <!-- Map Viewer -->
+      <div class="map-box">
+        <div id="map"></div>
+        <div class="map-label">Map Viewer - Nyeri County</div>
+      </div>
+
+      <!-- Parcel Info Display -->
+      <div class="parcel-info">
+        <h3>Parcel Information</h3>
+        <div class="tabs">
+          <span onclick="showTab('info')" id="infoTab" style="color: #047857;">Information</span>
+          <span onclick="showTab('history')" id="historyTab" style="color: grey;">History</span>
+          <span onclick="showTab('docs')" id="docsTab" style="color: grey;">Documents</span>
+        </div>
+        <div id="infoContent">
+          <ul id="infoDisplay">
+            <li>Owner Name: <em>Select a parcel</em></li>
+            <li>Parcel No.: <em>Select a parcel</em></li>
+            <li>Area: <em>Select a parcel</em></li>
+            <li>FR Number: <em>Select a parcel</em></li>
+          </ul>
+        </div>
+        <div id="historyContent" style="display: none;">
+          <p>Transaction history will be displayed here.</p>
+        </div>
+        <div id="docsContent" style="display: none;">
+          <p>Related documents will be displayed here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let map, parcelLayer;
+    let sampleData = null;
+    let currentTab = 'info';
+
+    // Sample data for demonstration (replace with actual GeoServer data)
+    const sampleParcels = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "parcel_No": "NYERI/BLOCK1/001",
+            "ownerName": "John Kamau",
+            "frNumber": "FR001/2023",
+            "shape_area": 2500.50,
+            "shape_length": 200.75
+          },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [37.0586, -0.4212],
+              [37.0596, -0.4212],
+              [37.0596, -0.4222],
+              [37.0586, -0.4222],
+              [37.0586, -0.4212]
+            ]]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "parcel_No": "NYERI/BLOCK1/002",
+            "ownerName": "Mary Wanjiku",
+            "frNumber": "FR002/2023",
+            "shape_area": 1800.25,
+            "shape_length": 170.50
+          },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [37.0596, -0.4212],
+              [37.0606, -0.4212],
+              [37.0606, -0.4222],
+              [37.0596, -0.4222],
+              [37.0596, -0.4212]
+            ]]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "parcel_No": "NYERI/BLOCK2/001",
+            "ownerName": "Peter Mwangi",
+            "frNumber": "FR003/2023",
+            "shape_area": 3200.75,
+            "shape_length": 225.30
+          },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [37.0586, -0.4222],
+              [37.0596, -0.4222],
+              [37.0596, -0.4232],
+              [37.0586, -0.4232],
+              [37.0586, -0.4222]
+            ]]
+          }
+        }
+      ]
+    };
+
+    window.onload = function () {
+      initializeMap();
+      showMessage('Click "Load Sample Data" to see demo parcels, or configure GeoServer connection.', 'info');
+    };
+
+    function initializeMap() {
+      // Initialize map centered on Nyeri County
+      map = L.map('map').setView([-0.4212, 37.0586], 15);
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Try to load data from GeoServer
+      loadGeoServerData();
+
+      // Ensure map renders properly
+      setTimeout(() => map.invalidateSize(), 500);
+    }
+
+    function loadGeoServerData() {
+      // Updated GeoServer WFS URL - adjust as needed
+      const wfsUrl = "http://localhost:8080/geoserver/LIS/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=LIS:Lands_parcel&outputFormat=application/json";
+
+      fetch(wfsUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data && data.features && data.features.length > 0) {
+            loadParcels(data);
+            showMessage('Parcel data loaded successfully from GeoServer!', 'success');
+          } else {
+            throw new Error('No parcel data found');
+          }
+        })
+        .catch(error => {
+          console.error('GeoServer connection failed:', error);
+          showMessage('Could not connect to GeoServer. Using sample data instead.', 'error');
+        });
+    }
+
+    function loadSampleData() {
+      loadParcels(sampleParcels);
+      showMessage('Sample parcel data loaded successfully!', 'success');
+    }
+
+    function loadParcels(data) {
+      // Remove existing parcel layer
+      if (parcelLayer) {
+        map.removeLayer(parcelLayer);
+      }
+
+      // Add new parcel layer
+      parcelLayer = L.geoJSON(data, {
+        onEachFeature: function (feature, layer) {
+          const props = feature.properties;
+          
+          // Create popup content
+          const popupContent = `
+            <div style="max-width: 200px;">
+              <h4 style="margin: 0 0 10px 0; color: #047857;">Parcel Details</h4>
+              <p><strong>Parcel No:</strong> ${props.parcel_No || 'N/A'}</p>
+              <p><strong>Owner:</strong> ${props.ownerName || 'N/A'}</p>
+              <p><strong>FR Number:</strong> ${props.frNumber || 'N/A'}</p>
+              <p><strong>Area:</strong> ${props.shape_area ? props.shape_area.toLocaleString() + ' sq.m' : 'N/A'}</p>
+              <p><strong>Perimeter:</strong> ${props.shape_length ? props.shape_length.toLocaleString() + ' m' : 'N/A'}</p>
+            </div>
+          `;
+          
+          layer.bindPopup(popupContent);
+          
+          // Store parcel data for searching
+          layer._parcelData = props;
+          
+          // Add click event to update parcel info panel
+          layer.on('click', function() {
+            updateParcelInfo(props);
+          });
+        },
+        style: function(feature) {
+          return {
+            color: "#047857",
+            weight: 2,
+            fillOpacity: 0.3,
+            fillColor: "#10b981"
+          };
+        }
+      }).addTo(map);
+
+      // Fit map to show all parcels
+      if (parcelLayer.getBounds().isValid()) {
+        map.fitBounds(parcelLayer.getBounds());
+      }
+
+      sampleData = data;
+    }
+
+    function searchParcel() {
+      if (!parcelLayer) {
+        showMessage('No parcel data loaded. Please load data first.', 'error');
+        return;
+      }
+
+      const searchValues = {
+        parcel_No: document.getElementById('parcel_No').value.trim(),
+        ownerName: document.getElementById('ownerName').value.trim(),
+        frNumber: document.getElementById('frNumber').value.trim(),
+        shape_area: document.getElementById('shape_area').value.trim(),
+        shape_length: document.getElementById('shape_length').value.trim()
+      };
+
+      // Check if any search field has a value
+      const hasSearchCriteria = Object.values(searchValues).some(value => value !== '');
+      
+      if (!hasSearchCriteria) {
+        showMessage('Please enter at least one search criteria.', 'error');
+        return;
+      }
+
+      let matchedLayers = [];
+
+      parcelLayer.eachLayer(layer => {
+        const props = layer._parcelData;
+        let isMatch = true;
+
+        // Check each search criteria
+        for (const [key, searchValue] of Object.entries(searchValues)) {
+          if (searchValue) {
+            const propValue = props[key];
+            if (!propValue) {
+              isMatch = false;
+              break;
+            }
+            
+            // Convert to string for comparison
+            const propStr = propValue.toString().toLowerCase();
+            const searchStr = searchValue.toLowerCase();
+            
+            if (!propStr.includes(searchStr)) {
+              isMatch = false;
+              break;
+            }
+          }
+        }
+
+        if (isMatch) {
+          matchedLayers.push(layer);
+        }
+      });
+
+      if (matchedLayers.length > 0) {
+        // Highlight and show first match
+        const firstMatch = matchedLayers[0];
+        firstMatch.openPopup();
+        map.fitBounds(firstMatch.getBounds());
+        updateParcelInfo(firstMatch._parcelData);
+        
+        showMessage(`Found ${matchedLayers.length} matching parcel(s).`, 'success');
+      } else {
+        showMessage('No parcels found matching your search criteria.', 'error');
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('parcel_No').value = '';
+      document.getElementById('ownerName').value = '';
+      document.getElementById('frNumber').value = '';
+      document.getElementById('shape_area').value = '';
+      document.getElementById('shape_length').value = '';
+      
+      // Clear messages
+      document.getElementById('searchMessages').innerHTML = '';
+      
+      // Reset parcel info
+      resetParcelInfo();
+    }
+
+    function updateParcelInfo(props) {
+      document.getElementById('infoDisplay').innerHTML = `
+        <li>Owner Name: <strong>${props.ownerName || 'N/A'}</strong></li>
+        <li>Parcel No.: <strong>${props.parcel_No || 'N/A'}</strong></li>
+        <li>Area: <strong>${props.shape_area ? props.shape_area.toLocaleString() + ' sq.m' : 'N/A'}</strong></li>
+        <li>FR Number: <strong>${props.frNumber || 'N/A'}</strong></li>
+        <li>Perimeter: <strong>${props.shape_length ? props.shape_length.toLocaleString() + ' m' : 'N/A'}</strong></li>
+      `;
+    }
+
+    function resetParcelInfo() {
+      document.getElementById('infoDisplay').innerHTML = `
+        <li>Owner Name: <em>Select a parcel</em></li>
+        <li>Parcel No.: <em>Select a parcel</em></li>
+        <li>Area: <em>Select a parcel</em></li>
+        <li>FR Number: <em>Select a parcel</em></li>
+      `;
+    }
+
+    function showMessage(message, type) {
+      const messagesDiv = document.getElementById('searchMessages');
+      const className = type === 'error' ? 'error-message' : 
+                       type === 'success' ? 'success-message' : 
+                       'loading';
+      
+      messagesDiv.innerHTML = `<div class="${className}">${message}</div>`;
+      
+      // Auto-clear success messages after 5 seconds
+      if (type === 'success') {
+        setTimeout(() => {
+          messagesDiv.innerHTML = '';
+        }, 5000);
+      }
+    }
+
+    function showTab(tabName) {
+      // Hide all content divs
+      document.getElementById('infoContent').style.display = 'none';
+      document.getElementById('historyContent').style.display = 'none';
+      document.getElementById('docsContent').style.display = 'none';
+      
+      // Reset all tab colors
+      document.getElementById('infoTab').style.color = 'grey';
+      document.getElementById('historyTab').style.color = 'grey';
+      document.getElementById('docsTab').style.color = 'grey';
+      
+      // Show selected content and highlight tab
+      if (tabName === 'info') {
+        document.getElementById('infoContent').style.display = 'block';
+        document.getElementById('infoTab').style.color = '#047857';
+      } else if (tabName === 'history') {
+        document.getElementById('historyContent').style.display = 'block';
+        document.getElementById('historyTab').style.color = '#047857';
+      } else if (tabName === 'docs') {
+        document.getElementById('docsContent').style.display = 'block';
+        document.getElementById('docsTab').style.color = '#047857';
+      }
+      
+      currentTab = tabName;
+    }
+
+    // Sidebar navigation functions
+    function showDashboard() {
+      showMessage('Dashboard functionality not implemented yet.', 'info');
+    }
+
+    function showSearch() {
+      showMessage('You are in the search section.', 'info');
+    }
+
+    function showMap() {
+      showMessage('You are viewing the map section.', 'info');
+      if (map) {
+        setTimeout(() => map.invalidateSize(), 300);
+      }
+    }
+  </script>
+</body>
+</html>
